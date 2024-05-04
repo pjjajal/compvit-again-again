@@ -1,0 +1,27 @@
+teacher:
+  name: dinov2_vits14
+  checkpoint: ""
+
+student:
+  name: dinov2_vits14
+  checkpoint: ""
+  r: 24
+
+hyperparameters:
+  lr: 2.5E-04
+  min_lr: 1.0e-7
+  warmup_lr_scale: 1.0e-4
+  warmup_epochs: 10
+  batch_size: 128
+  num_workers: 4
+  epochs: 150
+  mixup_classes: 1000
+  mixup_alpha: 1.0 
+  accumulations: 8
+  in_memory: False
+  gradient_clip_val: 1.5
+
+args:
+  device: cuda:0
+  data_dir: ""
+  precision: "bf16-mixed"

@@ -1,0 +1,29 @@
+teacher:
+  name: base
+  checkpoint: ""
+
+student:
+  name: base
+  checkpoint: ""
+
+hyperparameters:
+  lr: 1.0E-04
+  min_lr: 1.0e-7
+  warmup_lr_scale: 1.0e-4
+  warmup_epochs: 1
+  batch_size: 256
+  num_workers: 32
+  epochs: 6
+  mixup_alpha: 1.0 
+  mixup_classes: 10450
+  test_batch_size: 32
+  accumulations: 2
+  in_memory: False
+  gradient_clip_val: 10
+  
+
+args:
+  device: cuda:0
+  data_dir: ""
+  cache_path: ""
+  precision: "bf16-mixed"

@@ -1,0 +1,10 @@
+torch
+torchvision
+torchaudio
+wandb
+lightning
+omegaconf
+pandas
+scipy
+timm
+

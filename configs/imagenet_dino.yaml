@@ -1,0 +1,33 @@
+dinov2:
+  name: dinov2_vitl14
+  checkpoint: ""
+
+compvit:
+  name: compvitb14
+  checkpoint: ""
+
+head:
+  num_classes: 1000
+  checkpoint: ""
+
+
+hyperparameters:
+  lr: 2.50E-03
+  min_lr: 1.0e-7
+  warmup_lr_scale: 1.0e-4
+  warmup_epochs: 1
+  batch_size: 512
+  test_batch_size: 32
+  num_workers: 16
+  epochs: 100
+  mixup_alpha: 0.8 
+  accumulations: 4
+  in_memory: False
+  gradient_clip_val: 1.5
+
+args:
+  device: cuda:0
+  data_dir_train: ""
+  data_dir_test: ""
+  data_dir: ""
+  precision: "bf16-mixed"
