@@ -38,9 +38,9 @@ class CompViT(DinoVisionTransformer):
         num_register_tokens=0,
         interpolate_antialias=False,
         interpolate_offset=0.1,
-        num_compressed_tokens=0,
+        num_compressed_tokens=[0],
         num_patches=256,
-        bottleneck_loc=5,
+        bottleneck_loc=[5],
         **kwargs,
     ):
         super().__init__(
@@ -98,22 +98,27 @@ class CompViT(DinoVisionTransformer):
             # Set the blocks where bottleneck will be with None
             self.bottleneck_loc = bottleneck_loc
 
-            self.compressor = Compressor(
-                dim=embed_dim,
-                num_heads=num_heads,
-                mlp_ratio=mlp_ratio,
-                qkv_bias=qkv_bias,
-                proj_bias=proj_bias,
-                ffn_bias=ffn_bias,
-                norm_layer=norm_layer,
-                act_layer=act_layer,
-                ffn_layer=ffn_layer,
-                init_values=init_values,
-                num_compressed_tokens=self.num_compressed_tokens,
-                num_tokens=self.total_tokens,
-                num_register_tokens=self.num_register_tokens,
-                **kwargs,
-            )
+            compressors = []
+            for loc, comp_tokens in zip(bottleneck_loc, num_compressed_tokens):
+                compressors.append(
+                    Compressor(
+                        dim=embed_dim,
+                        num_heads=num_heads,
+                        mlp_ratio=mlp_ratio,
+                        qkv_bias=qkv_bias,
+                        proj_bias=proj_bias,
+                        ffn_bias=ffn_bias,
+                        norm_layer=norm_layer,
+                        act_layer=act_layer,
+                        ffn_layer=ffn_layer,
+                        init_values=init_values,
+                        num_compressed_tokens=comp_tokens,
+                        num_tokens=self.total_tokens,
+                        num_register_tokens=self.num_register_tokens,
+                        **kwargs,
+                    )
+                )
+            self.compressors = nn.ModuleList(compressors)
 
     def forward_features(self, x, masks=None, get_attn=False, use_decoder=False):
         if isinstance(x, list):
@@ -125,8 +130,8 @@ class CompViT(DinoVisionTransformer):
 
         for i, blk in enumerate(self.blocks):
             x = blk(x)
-            if self.compress and i == self.bottleneck_loc:
-                x = self.compressor(x, get_attn)
+            if self.compress and i in self.bottleneck_loc:
+                x = self.compressors[self.bottleneck_loc.index(i)](x, get_attn)
 
         x_norm = self.norm(x)
         return {
