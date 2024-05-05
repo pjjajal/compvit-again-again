@@ -51,42 +51,26 @@ def main():
     # model = exit_patch("vit_base_patch16_224", pretrained=True)
 
     data = []
-    model, config = dinov2_factory("dinov2_vitb14",)
-    model = LinearClassifierModel(model, 1000)
-    model.model.load_state_dict(
-        torch.load("dinov2/checkpoints/dinov2_vitb14_pretrain.pth")
-    )
-    model.head.load_state_dict(
-        torch.load("dinov2/checkpoints/dinov2_vitb14_linear_head.pth")
-    )
-    model = model.to(device)
-    train_dataset, eval_dataset = create_dataset(eval_config)
+    for r in range(2, 25):
+        model, config = dinov2_tome_factory("dinov2_vits14", r=r)
 
-    top1, top5 = eval_model(model, eval_dataset, device, batch_size=eval_config.batch_size)
-    print(f"Top-1 accuracy: {top1:.2f}")
-    print(f"Top-5 accuracy: {top5:.2f}")
-    print(f"Top-1 accuracy: {top1}")
-    print(f"Top-5 accuracy: {top5}")
-    # for r in range(8, 49):
-    #     model, config = dinov2_tome_factory("dinov2_vitl14", r=r)
+        model = LinearClassifierModel(model, 1000)
+        model.model.load_state_dict(
+            torch.load("dinov2/checkpoints/dinov2_vits14_pretrain.pth")
+        )
+        model.head.load_state_dict(
+            torch.load("dinov2/checkpoints/dinov2_vits14_linear_head.pth")
+        )
+        model = model.to(device)
 
-    #     model = LinearClassifierModel(model, 1000)
-    #     model.model.load_state_dict(
-    #         torch.load("dinov2/checkpoints/dinov2_vitl14_pretrain.pth")
-    #     )
-    #     model.head.load_state_dict(
-    #         torch.load("dinov2/checkpoints/dinov2_vitl14_linear_head.pth")
-    #     )
-    #     model = model.to(device)
+        train_dataset, eval_dataset = create_dataset(eval_config)
 
-    #     train_dataset, eval_dataset = create_dataset(eval_config)
-
-    #     top1, top5 = eval_model(model, eval_dataset, device, batch_size=eval_config.batch_size)
-    #     print(f"Top-1 accuracy: {top1:.2f}")
-    #     print(f"Top-5 accuracy: {top5:.2f}")
-    #     data.append({"r": r,"top1": 100 * top1.item(), "top5": 100 * top5.item()})
+        top1, top5 = eval_model(model, eval_dataset, device, batch_size=eval_config.batch_size)
+        print(f"Top-1 accuracy: {top1:.2f}")
+        print(f"Top-5 accuracy: {top5:.2f}")
+        data.append({"r": r,"top1": 100 * top1.item(), "top5": 100 * top5.item()})
     
-    # pd.DataFrame(data).to_csv("benchmarks/eval_results/dinov2_vitl14_tome.csv")
+    pd.DataFrame(data).to_csv("benchmarks/eval_results/dinov2_vits14_tome.csv")
 
 
 if __name__ == "__main__":

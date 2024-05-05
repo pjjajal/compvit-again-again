@@ -18,7 +18,7 @@ from torchmetrics import Accuracy
 
 from compvit.factory import compvit_factory
 from deit.factory import compdeit_factory
-from deit.models import CompDeiT
+from deit.deit import CompDeiT
 from compvit.models.compvit import CompViT
 from datasets import create_dataset
 from dinov2.factory import dinov2_factory
@@ -84,14 +84,14 @@ class LinearClassifierModel(nn.Module):
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
-        assert isinstance(model, (CompDeiT, CompViT))
+        assert isinstance(model, (CompDeiT, CompViT, DinoVisionTransformer))
 
         self.num_classes = num_classes
         self.model = model
 
         if isinstance(model, CompDeiT):
             self.head = nn.Linear(model.embed_dim, num_classes)
-        elif isinstance(model, CompViT):
+        elif isinstance(model, (CompViT, DinoVisionTransformer)):
             self.head = nn.Linear(model.embed_dim * 2, num_classes)
 
     def forward(self, x, **kwargs):

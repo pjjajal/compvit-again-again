@@ -42,17 +42,9 @@ class CompViTToMe(CompViT):
         num_register_tokens=0,
         interpolate_antialias=False,
         interpolate_offset=0.1,
-        num_compressed_tokens=0,
+        num_compressed_tokens=[0],
         num_patches=256,
-        bottleneck: Literal[
-            "mixer_bottleneck",
-            "mixer_bottleneck_relu",
-            "mixer_bottleneck_multi",
-            "mixer_bottleneck_multi_v2",
-            "conv_bottleneck",
-        ] = "conv_bottleneck",
-        bottleneck_loc=5,
-        bottleneck_size=1,
+        bottleneck_loc=[5],
         **kwargs,
     ):
         super().__init__(
@@ -79,9 +71,7 @@ class CompViTToMe(CompViT):
             interpolate_offset,
             num_compressed_tokens,
             num_patches,
-            bottleneck,
             bottleneck_loc,
-            bottleneck_size,
             **kwargs,
         )
 
