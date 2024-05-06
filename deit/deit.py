@@ -64,8 +64,9 @@ class CompDeiT(DeiT):
         act_layer: Optional[LayerType] = None,
         block_fn: Type[nn.Module] = Block,
         mlp_layer: Type[nn.Module] = Mlp,
-        num_compressed_tokens=0,
-        bottleneck_loc=5,
+        num_compressed_tokens=[0],
+        bottleneck_loc=[5],
+        **kwargs
     ) -> None:
         super().__init__(
             img_size,
@@ -108,20 +109,28 @@ class CompDeiT(DeiT):
         self.num_compressed_tokens = num_compressed_tokens  # Add CLS Token
         self.bottleneck_loc = bottleneck_loc
 
-        self.compressor = Compressor(
-            dim=embed_dim,
-            num_heads=num_heads,
-            mlp_ratio=mlp_ratio,
-            qkv_bias=True,
-            proj_bias=True,
-            ffn_bias=True,
-            norm_layer=norm_layer,
-            act_layer=act_layer,
-            ffn_layer=mlp_layer,
-            init_values=init_values,
-            num_compressed_tokens=self.num_compressed_tokens,
-            num_tokens=self.total_tokens,
-        )
+
+        compressors = []
+        for loc, comp_tokens in zip(bottleneck_loc, num_compressed_tokens):
+            compressors.append(
+                Compressor(
+                    dim=embed_dim,
+                    num_heads=num_heads,
+                    mlp_ratio=mlp_ratio,
+                    qkv_bias=qkv_bias,
+                    proj_bias=True,
+                    ffn_bias=True,
+                    norm_layer=norm_layer,
+                    act_layer=act_layer,
+                    ffn_layer=mlp_layer,
+                    init_values=init_values,
+                    num_compressed_tokens=comp_tokens,
+                    num_tokens=self.total_tokens,
+                    num_register_tokens=reg_tokens,
+                    **kwargs,
+                )
+            )
+        self.compressors = nn.ModuleList(compressors)
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
         x = self.patch_embed(x)
@@ -131,8 +140,8 @@ class CompDeiT(DeiT):
 
         for i, blk in enumerate(self.blocks):
             x = blk(x)
-            if i == self.bottleneck_loc:
-                x = self.compressor(x)
+            if i in self.bottleneck_loc:
+                x = self.compressors[self.bottleneck_loc.index(i)](x)
         x = self.norm(x)
         return x
 
@@ -232,5 +241,5 @@ def deit3_large_patch16_224(pretrained=False, **kwargs) -> VisionTransformer:
 if __name__ == "__main__":
     # model = deit_tiny_patch16_224(pretrained=False)
     # print(model(torch.randn(1, 3, 224, 224)).cuda().shape)
-    model = deit_tiny_patch16_224(pretrained=False, compvit=True)
+    model, _ = deit_tiny_patch16_224(pretrained=False, compvit=True)
     print(model(torch.randn(1, 3, 224, 224)).shape)

@@ -1,0 +1,45 @@
+tiny:
+  drop_rate: 0.0
+  pos_drop_rate: 0.0
+  patch_drop_rate: 0.0
+  proj_drop_rate: 0.0
+  attn_drop_rate: 0.0
+  drop_path_rate: 0.0
+  # Compressor Specific
+  num_compressed_tokens: [16]
+  bottleneck_loc: [5]
+
+small:
+  drop_rate: 0.0
+  pos_drop_rate: 0.0
+  patch_drop_rate: 0.0
+  proj_drop_rate: 0.0
+  attn_drop_rate: 0.0
+  drop_path_rate: 0.0
+  # Compressor Specific
+  num_compressed_tokens: [16]
+  bottleneck_loc: [5]
+
+
+base:
+  drop_rate: 0.0
+  pos_drop_rate: 0.0
+  patch_drop_rate: 0.0
+  proj_drop_rate: 0.0
+  attn_drop_rate: 0.0
+  drop_path_rate: 0.0
+  # Compressor Specific
+  num_compressed_tokens: [16]
+  bottleneck_loc: [5]
+
+
+large:
+  drop_rate: 0.0
+  pos_drop_rate: 0.0
+  patch_drop_rate: 0.0
+  proj_drop_rate: 0.0
+  attn_drop_rate: 0.0
+  drop_path_rate: 0.0
+  # Compressor Specific
+  num_compressed_tokens: [16]
+  bottleneck_loc: [5]
