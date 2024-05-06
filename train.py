@@ -127,10 +127,10 @@ class LightningDistill(L.LightningModule):
         )
 
         # Decoder.
-        self.proj = Projection(student.embed_dim, teacher.embed_dim, normalize=False)
-        self.proj_patch = Projection(
-            student.embed_dim, teacher.embed_dim, normalize=False
-        )
+        if self.args.model == "dino":
+            self.proj = Projection(student.embed_dim * 2, teacher.embed_dim * 2, normalize=False)
+        elif self.args.model == "deit":
+            self.proj = Projection(student.embed_dim, teacher.embed_dim , normalize=False)
 
         self.head = nn.Linear(student.embed_dim * 2, hyperparameters["mixup_classes"])
         self.criterion = nn.CrossEntropyLoss()
@@ -195,9 +195,15 @@ class LightningDistill(L.LightningModule):
                 F.softmax(x_teacher * self.args.temp, dim=-1),
                 reduction="batchmean",
             )
+        
+        if self.args.model == "dino":
+            x = F.layer_norm(x, (self.teacher.embed_dim * 2,))
+            x_teacher = F.layer_norm(x_teacher, (self.teacher.embed_dim * 2,))
+        else:
+            x = F.layer_norm(x, (self.teacher.embed_dim,))
+            x_teacher = F.layer_norm(x_teacher, (self.teacher.embed_dim,))
         return self.mse_loss(
-            F.layer_norm(x, (self.teacher.embed_dim,)),
-            F.layer_norm(x_teacher, (self.teacher.embed_dim,)),
+            x, x_teacher
         )
 
     def training_step(self, batch, batch_idx):
@@ -217,17 +223,20 @@ class LightningDistill(L.LightningModule):
             resize_op(x) if self.args.symmetric else x
         )
 
-        student_cls_embeddings = self.proj(student_cls)
-        student_patch_embeddings = self.proj_patch(student_patch)
+        if self.args.model == "dino":
+            student_cls_embeddings = self.proj(torch.cat([student_cls, student_patch], dim=-1))
+            teacher_cls = torch.cat([teacher_cls, teacher_patch], dim=-1)
+        # student_cls_embeddings = self.proj(student_cls)
+        # student_patch_embeddings = self.proj_patch(student_patch)
 
         # Loss.
         loss_cls = self.calculate_loss(student_cls_embeddings, teacher_cls)
 
-        loss_patch = 0
-        if not self.args.model == "deit":
-            loss_patch = self.calculate_loss(student_patch_embeddings, teacher_patch)
+        # loss_patch = 0
+        # if not self.args.model == "deit":
+        #     loss_patch = self.calculate_loss(student_patch_embeddings, teacher_patch)
 
-        loss = loss_cls + loss_patch
+        loss = loss_cls
 
         # Running loss.
         self.running_loss += loss.detach().item()
@@ -238,13 +247,13 @@ class LightningDistill(L.LightningModule):
             prog_bar=True,
             logger=True,
         )
-        self.log(
-            "patch loss",
-            loss_patch,
-            on_epoch=True,
-            prog_bar=True,
-            logger=True,
-        )
+        # self.log(
+        #     "patch loss",
+        #     loss_patch,
+        #     on_epoch=True,
+        #     prog_bar=True,
+        #     logger=True,
+        # )
         self.log(
             "train loss",
             loss,
@@ -262,7 +271,7 @@ class LightningDistill(L.LightningModule):
         # Determine parameters to optimize.
         parameters = list(self.student.parameters())
         parameters += list(self.proj.parameters())  # Add decoder parameters.
-        parameters += list(self.proj_patch.parameters())
+        # parameters += list(self.proj_patch.parameters())
         optimizer = optim.AdamW(
             parameters,
             lr=self.hyperparameters["lr"],

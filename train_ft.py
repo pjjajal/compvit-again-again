@@ -161,7 +161,7 @@ class LightningFT(L.LightningModule):
     def training_step(self, batch, batch_idx):
         x, label = batch
         x, label = self.cutmix_or_mixup(x, label)
-        outputs = self.model(x, use_decoder=self.args.use_decoder)
+        outputs = self.model(x)
         loss = self.criterion(outputs, label)
         # Running loss.
         self.running_loss += loss.detach().item()
@@ -170,7 +170,7 @@ class LightningFT(L.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, label = batch
-        outputs = self.model(x, use_decoder=self.args.use_decoder)
+        outputs = self.model(x)
         loss = self.criterion(outputs, label)
 
         # Accuracy
@@ -233,7 +233,7 @@ class LightningFT(L.LightningModule):
 def main(args):
     config_path = CONFIG_PATH / (args.dataset + f"_{args.model}" + ".yaml")
     configs = OmegaConf.load(config_path)
-    model_config = configs[args.model]
+    model_config = configs["compvit"]
     head_config = configs["head"]
     hyperparameters = configs["hyperparameters"]
 
@@ -265,7 +265,7 @@ def main(args):
     model = LightningFT(model, args, hyperparameters)
 
     # Setup W&B.
-    wandb_logger = WandbLogger(project="compvit-again-rcac-new")
+    wandb_logger = WandbLogger(project="compvit-again-again")
 
     # Create lr monitor
     lr_monitor = LearningRateMonitor(logging_interval="step")
