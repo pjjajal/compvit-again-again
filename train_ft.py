@@ -127,7 +127,7 @@ class LightningFT(L.LightningModule):
         self.criterion = nn.CrossEntropyLoss()
 
         self.ema_model = torch.optim.swa_utils.AveragedModel(
-            self.model, multi_avg_fn=torch.optim.swa_utils.get_ema_multi_avg_fn(0.900)
+            self.model, multi_avg_fn=torch.optim.swa_utils.get_ema_multi_avg_fn(0.999)
         )
 
         self.cutmix_or_mixup = []
@@ -157,6 +157,12 @@ class LightningFT(L.LightningModule):
         self.accuracy_top5 = Accuracy(
             "multiclass", num_classes=model.num_classes, top_k=5
         )
+        self.ema_accuracy_top1 = Accuracy(
+            "multiclass", num_classes=model.num_classes, top_k=1
+        )
+        self.ema_accuracy_top5 = Accuracy(
+            "multiclass", num_classes=model.num_classes, top_k=5
+        )
 
     def training_step(self, batch, batch_idx):
         x, label = batch
@@ -173,9 +179,15 @@ class LightningFT(L.LightningModule):
         outputs = self.model(x)
         loss = self.criterion(outputs, label)
 
+        # ema model eval
+        ema_outputs = self.ema_model(x)
+        ema_loss = self.criterion(outputs, label)
+
         # Accuracy
         self.accuracy_top1(outputs, label)
         self.accuracy_top5(outputs, label)
+        self.ema_accuracy_top1(outputs, label)
+        self.ema_accuracy_top5(outputs, label)
         self.log(
             "accuracy_top1",
             self.accuracy_top1,
@@ -190,7 +202,22 @@ class LightningFT(L.LightningModule):
             prog_bar=True,
             logger=True,
         )
+        self.log(
+            "ema_accuracy_top1",
+            self.ema_accuracy_top1,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+        )
+        self.log(
+            "ema_accuracy_top5",
+            self.ema_accuracy_top5,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+        )
         self.log("test loss", loss, on_epoch=True, prog_bar=True, logger=True)
+        self.log("ema test loss", ema_loss, on_epoch=True, prog_bar=True, logger=True)
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(

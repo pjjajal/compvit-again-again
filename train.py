@@ -226,6 +226,8 @@ class LightningDistill(L.LightningModule):
         if self.args.model == "dino":
             student_cls_embeddings = self.proj(torch.cat([student_cls, student_patch], dim=-1))
             teacher_cls = torch.cat([teacher_cls, teacher_patch], dim=-1)
+        else:
+            student_cls_embeddings = self.proj(student_cls)
         # student_cls_embeddings = self.proj(student_cls)
         # student_patch_embeddings = self.proj_patch(student_patch)
 

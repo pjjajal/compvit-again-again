@@ -21,7 +21,7 @@ def compdeit_factory(name: Literal["tiny", "small", "base", "large"], **kwargs):
     conf = conf[name]
 
     if name == "tiny":
-        model, model_conf = deit3_small_patch16_224(
+        model, model_conf = deit_tiny_patch16_224(
             pretrained=True,
             compvit=True,
             pretrained_strict=False,
@@ -56,8 +56,8 @@ def compdeit_factory(name: Literal["tiny", "small", "base", "large"], **kwargs):
 
 
 def distill_factory(
-    teacher_name: Literal["small", "base", "large"],
-    student_name: Literal["small", "base", "large"],
+    teacher_name: Literal["tiny", "small", "base", "large"],
+    student_name: Literal["tiny", "small", "base", "large"],
     **kwargs
 ):
     if teacher_name == "tiny":
