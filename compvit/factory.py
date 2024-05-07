@@ -13,6 +13,7 @@ from dinov2.layers import MemEffAttention
 from dinov2.layers import NestedTensorBlock as Block
 
 from .models.compvit import CompViT
+from .models.compvit_tome import CompViTToMe
 
 CONFIG_PATH = Path(os.path.dirname(os.path.abspath(__file__))) / "configs"
 
@@ -29,11 +30,14 @@ def compvit_factory(
 
     # kwargs can overwrite the default config. This allows for overriding config defaults.
     conf = OmegaConf.merge(conf[model_name], kwargs)
+    
+    r = kwargs['r']
+    if r:
+        model = CompViTToMe(block_fn=partial(Block, attn_class=attn_class), **conf)
+    else:
+        model = CompViT(block_fn=partial(Block, attn_class=attn_class), **conf)
 
-    return (
-        CompViT(block_fn=partial(Block, attn_class=attn_class), **conf),
-        conf,
-    )
+    return (model, conf)
 
 
 def distill_factory(

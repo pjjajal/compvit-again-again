@@ -25,6 +25,7 @@ class DeiT(VisionTransformer):
             return {
                 "x_norm_clstoken": x[:, 0],
                 "x_norm_patchtokens": x[:, 1:],
+                "x_norm": x,
             }
         x = self.forward_head(x)
         return x

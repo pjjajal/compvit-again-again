@@ -12,24 +12,19 @@ from dinov2.factory import dinov2_factory
 from dinov2.layers import MemEffAttention
 from dinov2.layers import NestedTensorBlock as Block
 
-from .patch.dinov2 import apply_patch as dinov2_apply_patch
+from .dinov2 import dinov2_apply_patch
 
-
-CONFIG_PATH = Path(os.path.dirname(os.path.abspath(__file__))) / "configs"
-
-
-def dinov2_tome_factory(
-    dinov2_model_name: Literal["dinov2_vittiny14", "dinov2_vits14", "dinov2_vitb14", "dinov2_vitl14", "dinov2_vitg14"],
+def dinov2_topk_factory(
+    dinov2_model_name: Literal[ "dinov2_vits14", "dinov2_vitb14", "dinov2_vitl14", "dinov2_vitg14"],
     r: Union[List[int], int],
     **kwargs
 ) -> Tuple:
 
     ### Get the baseline dinov2 model
     dinov2_model, dinov2_config = dinov2_factory(dinov2_model_name)
-    
 
     ### Now, wrap it with tome
-    dinov2_apply_patch(dinov2_model, trace_source=False, prop_attn=False)
+    dinov2_apply_patch(dinov2_model)
 
     ### Set r accordingly
     dinov2_model.r = r
@@ -39,5 +34,6 @@ def dinov2_tome_factory(
         dinov2_config
     )
 
+
 if __name__ == "__main__":
-    model, conf = dinov2_tome_factory("dinov2_vits14")
+    model, conf = dinov2_topk_factory("dinov2_vits14", r=2)

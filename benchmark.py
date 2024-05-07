@@ -1,3 +1,4 @@
+# This code is awful. I'm sorry, but I will clean it up soon.
 import warnings
 
 ### Ignore pesky warnings
@@ -13,17 +14,24 @@ import pandas as pd
 import torch
 import torch.utils.benchmark as bench
 
+from deit.deit import (
+    deit3_base_patch16_224,
+    deit_tiny_patch16_224,
+    deit3_small_patch16_224,
+    deit3_large_patch16_224,
+)
+from deit.factory import compdeit_factory
 from compvit.factory import compvit_factory
 from dinov2.factory import dinov2_factory
 from exited_models.patch import exit_patch
 from thirdparty.tome.factory import dinov2_tome_factory
+from thirdparty.topk.factory import dinov2_topk_factory
 
 
 def parse_args():
     parser = argparse.ArgumentParser("Benchmarking Code")
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--device", choices=["cuda", "cpu", "mps"])
-    parser.add_argument("--use_decoder", action="store_true", default=False)
     single_group = parser.add_argument_group(
         title="Benchmark Single",
         description="Use these arguements to benchmark a SINGLE model.",
@@ -31,6 +39,14 @@ def parse_args():
     single_group.add_argument(
         "--model",
         choices=[
+            "deit_tiny",
+            "deit_small",
+            "deit_base",
+            "deit_large",
+            "compdeit_tiny",
+            "compdeit_small",
+            "compdeit_base",
+            "compdeit_large",
             "dinov2_vits14",
             "dinov2_vitb14",
             "dinov2_vitl14",
@@ -42,7 +58,7 @@ def parse_args():
         ],
     )
     single_group.add_argument("--wrap-tome", action="store_true")
-    single_group.add_argument("--tome-r", type=int, default=2)
+    single_group.add_argument("--tome-r", type=int, default=0)
 
     benchmark_all_group = parser.add_argument_group(
         title="Benchmark All",
@@ -50,6 +66,7 @@ def parse_args():
     )
     benchmark_all_group.add_argument("--all-compvit", action="store_true")
     benchmark_all_group.add_argument("--all-dino", action="store_true")
+    benchmark_all_group.add_argument("--all-deit", action="store_true")
     benchmark_all_group.add_argument("--filetag", default="", type=str)
 
     sweep_group = parser.add_argument_group(
@@ -78,6 +95,15 @@ def parse_args():
     tome_sweep.add_argument("--tome-sweep", action="store_true")
     tome_sweep.add_argument(
         "--tome-sweep-model",
+        choices=["dinov2_vits14", "dinov2_vitb14", "dinov2_vitl14", "dinov2_vitg14"],
+    )
+
+    tome_sweep = parser.add_argument_group(
+        title="TopK Sweep", description="Use these arguments to ablate TopK."
+    )
+    tome_sweep.add_argument("--topk-sweep", action="store_true")
+    tome_sweep.add_argument(
+        "--topk-sweep-model",
         choices=["dinov2_vits14", "dinov2_vitb14", "dinov2_vitl14", "dinov2_vitg14"],
     )
 
@@ -135,68 +161,30 @@ def device_info(args):
     return device_name
 
 
-def export_sweep_data(data: List[Dict[str, Any]], filename):
-    pd.DataFrame(data).to_csv(filename)
+def compvit_message(
+    model_name, config, model, latency_mean, latency_median, latency_iqr, final_tokens
+):
+    message = f"""\
+    ========================
+    {colour_text(model_name.upper(), 'green')}
+    {colour_text("Parameters", 'cyan')}: {sum(p.numel() for p in model.parameters()):,}
+    {colour_text("Depth", 'cyan')}: {config['depth']}
+    {colour_text("Embedding Dim", 'cyan')}: {config['embed_dim']}
+    {colour_text("num_compressed_tokens", 'cyan')}: {config['num_compressed_tokens']}
+    {colour_text("bottleneck_loc", 'cyan')}: {config['bottleneck_loc']}
+    {colour_text("Mean (ms)", "magenta")}: {latency_mean:.2f}
+    {colour_text("Median (ms)", "magenta")}: {latency_median:.2f}
+    {colour_text("IQR (ms)", "magenta")}: {latency_iqr:.2f}
+    {colour_text("Final Tokens", "magenta")}: {final_tokens}
+    ========================\
+    """
+    return textwrap.dedent(message)
 
 
-### Create a benchmark function (very simple)
-def benchmark_compvit_milliseconds(
-    x: torch.Tensor, model: torch.nn.Module, use_decoder: bool
-) -> Any:
-    ### Do the benchmark!
-    t0 = bench.Timer(
-        stmt=f"model.forward(x, use_decoder=use_decoder)",
-        globals={"x": x, "model": model, "use_decoder": use_decoder},
-        num_threads=1,
-    )
-
-    return t0.blocked_autorange(min_run_time=8.0)
-
-
-def inference(model, device, batch_size, use_decoder):
-    ### Turn off gradient compute
-    with torch.no_grad():
-        ### Run Benchmark for latency, then do torch profiling!
-        rand_x = torch.randn(
-            size=(batch_size, 3, 224, 224), dtype=torch.float32, device=device
-        )
-
-        ### Record latency with benchmark utility
-        latency_measurement = benchmark_compvit_milliseconds(rand_x, model, use_decoder)
-        latency_mean = latency_measurement.mean * 1e3
-        latency_median = latency_measurement.median * 1e3
-        latency_iqr = latency_measurement.iqr * 1e3
-
-        final_tokens = model.forward(rand_x, is_training=True, use_decoder=use_decoder)[
-            "x_norm"
-        ].shape[1]
-
-    return latency_mean, latency_median, latency_iqr, final_tokens
-
-
-def test_dino(args):
-    dino_models = [
-        "dinov2_vits14",
-        "dinov2_vitb14",
-        "dinov2_vitl14",
-        "dinov2_vitg14",
-    ]
-
-    ### Get args, device
-    device = torch.device(args.device)
-
-    all_data = []
-
-    # Measure dino models.
-    for model_name in dino_models:
-        model, config = dinov2_factory(model_name=model_name)
-
-        model = model.to(device).eval()
-        latency_mean, latency_median, latency_iqr, final_tokens = inference(
-            model, device, args.batch_size, args.use_decoder
-        )
-
-        message = f"""\
+def baseline_message(
+    model_name, config, model, latency_mean, latency_median, latency_iqr, final_tokens
+):
+    message = f"""\
         ========================
         {colour_text(model_name.upper(), 'green')}
         {colour_text("Parameters", 'cyan')}: {sum(p.numel() for p in model.parameters()):,}
@@ -208,7 +196,112 @@ def test_dino(args):
         {colour_text("Final Tokens", "magenta")}: {final_tokens}
         ========================\
         """
-        message = textwrap.dedent(message)
+    return textwrap.dedent(message)
+
+
+def tome_message(
+    model_name,
+    config,
+    model,
+    latency_mean,
+    latency_median,
+    latency_iqr,
+    final_tokens,
+    r,
+):
+    message = f"""\
+    ========================
+    {colour_text(model_name.upper(), 'green')}
+    {colour_text("Parameters", 'cyan')}: {sum(p.numel() for p in model.parameters()):,}
+    {colour_text("Depth", 'cyan')}: {config['depth']}
+    {colour_text("Embedding Dim", 'cyan')}: {config['embed_dim']}
+    {colour_text("r", 'cyan')}: {r}
+    {colour_text("Mean (ms)", "magenta")}: {latency_mean:.2f}
+    {colour_text("Median (ms)", "magenta")}: {latency_median:.2f}
+    {colour_text("IQR (ms)", "magenta")}: {latency_iqr:.2f}
+    {colour_text("Final Tokens", "magenta")}: {final_tokens}
+    ========================\
+    """
+    return textwrap.dedent(message)
+
+
+def export_sweep_data(data: List[Dict[str, Any]], filename):
+    pd.DataFrame(data).to_csv(filename)
+
+
+### Create a benchmark function (very simple)
+def benchmark_compvit_milliseconds(x: torch.Tensor, model: torch.nn.Module) -> Any:
+    ### Do the benchmark!
+    t0 = bench.Timer(
+        stmt=f"model.forward(x)",
+        globals={"x": x, "model": model},
+        num_threads=1,
+    )
+
+    return t0.blocked_autorange(min_run_time=8.0)
+
+
+def inference(model, device, batch_size):
+    ### Turn off gradient compute
+    with torch.no_grad():
+        ### Run Benchmark for latency, then do torch profiling!
+        rand_x = torch.randn(
+            size=(batch_size, 3, 224, 224), dtype=torch.float32, device=device
+        )
+
+        ### Record latency with benchmark utility
+        latency_measurement = benchmark_compvit_milliseconds(rand_x, model)
+        latency_mean = latency_measurement.mean * 1e3
+        latency_median = latency_measurement.median * 1e3
+        latency_iqr = latency_measurement.iqr * 1e3
+        
+        final_tokens = model.forward(rand_x, is_training=True)["x_norm"].shape[1]
+
+    return latency_mean, latency_median, latency_iqr, final_tokens
+
+
+def test_baseline(args):
+    if args.all_dino:
+        models = [
+            "dinov2_vits14",
+            "dinov2_vitb14",
+            "dinov2_vitl14",
+            "dinov2_vitg14",
+        ]
+    elif args.all_deit:
+        models = [
+            deit_tiny_patch16_224,
+            deit3_small_patch16_224,
+            deit3_base_patch16_224,
+            deit3_large_patch16_224,
+        ]
+
+    ### Get args, device
+    device = torch.device(args.device)
+
+    all_data = []
+
+    # Measure dino models.
+    for model_name in models:
+        if args.all_dino:
+            model, config = dinov2_factory(model_name=model_name)
+        elif args.all_deit:
+            model, config = model_name(dynamic_img_size=True)
+
+        model = model.to(device).eval()
+        latency_mean, latency_median, latency_iqr, final_tokens = inference(
+            model, device, args.batch_size
+        )
+
+        message = baseline_message(
+            str(model_name),
+            config,
+            model,
+            latency_mean,
+            latency_median,
+            latency_iqr,
+            final_tokens,
+        )
 
         print(message)
 
@@ -227,7 +320,7 @@ def test_dino(args):
         "_".join(
             [
                 device_info(args).replace(" ", ""),
-                "dinov2",
+                f"{'dino' if args.all_dino else 'deit'}",
                 f"bs{args.batch_size}",
                 f"{args.filetag}",
             ]
@@ -253,26 +346,20 @@ def test_compvit(args):
         model, config = compvit_factory(model_name=model_name)
         model = model.to(device).eval()
         latency_mean, latency_median, latency_iqr, final_tokens = inference(
-            model, device, args.batch_size, args.use_decoder
+            model,
+            device,
+            args.batch_size,
         )
 
-        message = f"""\
-        ========================
-        {colour_text(model_name.upper(), 'green')}
-        {colour_text("Parameters", 'cyan')}: {sum(p.numel() for p in model.parameters()):,}
-        {colour_text("Depth", 'cyan')}: {config['depth']}
-        {colour_text("Embedding Dim", 'cyan')}: {config['embed_dim']}
-        {colour_text("num_compressed_tokens", 'cyan')}: {config['num_compressed_tokens']}
-        {colour_text("bottleneck_loc", 'cyan')}: {config['bottleneck_loc']}
-        {colour_text("bottleneck_size", 'cyan')}: {config['bottleneck_size']}
-        {colour_text("bottleneck", 'cyan')}: {config['bottleneck']}
-        {colour_text("Mean (ms)", "magenta")}: {latency_mean:.2f} 
-        {colour_text("Median (ms)", "magenta")}: {latency_median:.2f}
-        {colour_text("IQR (ms)", "magenta")}: {latency_iqr:.2f}
-        {colour_text("Final Tokens", "magenta")}: {final_tokens}
-        ========================\
-        """
-        message = textwrap.dedent(message)
+        message = compvit_message(
+            model_name,
+            config,
+            model,
+            latency_mean,
+            latency_median,
+            latency_iqr,
+            final_tokens,
+        )
 
         print(message)
         all_data.append(
@@ -282,8 +369,6 @@ def test_compvit(args):
                 "Embedding Dim": config["embed_dim"],
                 "num_compressed_tokens": config["num_compressed_tokens"],
                 "bottleneck_locs": config["bottleneck_loc"],
-                "bottleneck_size": config["bottleneck_size"],
-                "bottleneck": config["bottleneck"],
                 "Mean (ms)": latency_mean,
                 "Median (ms)": latency_median,
                 "IQR (ms)": latency_iqr,
@@ -346,26 +431,20 @@ def compvit_sweep(args):
         # Standard measurement code.
         model = model.to(device).eval()
         latency_mean, latency_median, latency_iqr, final_tokens = inference(
-            model, device, args.batch_size, args.use_decoder
+            model,
+            device,
+            args.batch_size,
         )
 
-        message = f"""\
-        ========================
-        {colour_text(model_name.upper(), 'green')}
-        {colour_text("Parameters", 'cyan')}: {sum(p.numel() for p in model.parameters()):,}
-        {colour_text("Depth", 'cyan')}: {config['depth']}
-        {colour_text("Embedding Dim", 'cyan')}: {config['embed_dim']}
-        {colour_text("num_compressed_tokens", 'cyan')}: {config['num_compressed_tokens']}
-        {colour_text("bottleneck_loc", 'cyan')}: {config['bottleneck_loc']}
-        {colour_text("bottleneck_size", 'cyan')}: {config['bottleneck_size']}
-        {colour_text("bottleneck", 'cyan')}: {config['bottleneck']}
-        {colour_text("Mean (ms)", "magenta")}: {latency_mean:.2f}
-        {colour_text("Median (ms)", "magenta")}: {latency_median:.2f}
-        {colour_text("IQR (ms)", "magenta")}: {latency_iqr:.2f}
-        {colour_text("Final Tokens", "magenta")}: {final_tokens}
-        ========================\
-        """
-        message = textwrap.dedent(message)
+        message = compvit_message(
+            model_name,
+            config,
+            model,
+            latency_mean,
+            latency_median,
+            latency_iqr,
+            final_tokens,
+        )
 
         print(message)
 
@@ -376,8 +455,6 @@ def compvit_sweep(args):
                 "Embedding Dim": config["embed_dim"],
                 "num_compressed_tokens": config["num_compressed_tokens"],
                 "bottleneck_locs": config["bottleneck_loc"],
-                "bottleneck_size": config["bottleneck_size"],
-                "bottleneck": config["bottleneck"],
                 "Mean (ms)": latency_mean,
                 "Median (ms)": latency_median,
                 "IQR (ms)": latency_iqr,
@@ -409,23 +486,21 @@ def tome_sweep(args):
         model, config = dinov2_tome_factory(dinov2_model_name=model_name, r=r)
         model = model.to(device).eval()
         latency_mean, latency_median, latency_iqr, final_tokens = inference(
-            model, device, args.batch_size, args.use_decoder
+            model,
+            device,
+            args.batch_size,
         )
 
-        message = f"""\
-        ========================
-        {colour_text(model_name.upper(), 'green')}
-        {colour_text("Parameters", 'cyan')}: {sum(p.numel() for p in model.parameters()):,}
-        {colour_text("Depth", 'cyan')}: {config['depth']}
-        {colour_text("Embedding Dim", 'cyan')}: {config['embed_dim']}
-        {colour_text("r", 'cyan')}: {r}
-        {colour_text("Mean (ms)", "magenta")}: {latency_mean:.2f}
-        {colour_text("Median (ms)", "magenta")}: {latency_median:.2f}
-        {colour_text("IQR (ms)", "magenta")}: {latency_iqr:.2f}
-        {colour_text("Final Tokens", "magenta")}: {final_tokens}
-        ========================\
-        """
-        message = textwrap.dedent(message)
+        message = tome_message(
+            model_name,
+            config,
+            model,
+            latency_mean,
+            latency_median,
+            latency_iqr,
+            final_tokens,
+            r,
+        )
 
         print(message)
         all_data.append(
@@ -455,6 +530,59 @@ def tome_sweep(args):
     export_sweep_data(all_data, filename)
 
 
+def topk_sweep(args):
+    model_name = args.topk_sweep_model
+
+    ### Get args, device
+    device = torch.device(args.device)
+    all_data = []
+    for r in range(8, 48):
+        model, config = dinov2_topk_factory(dinov2_model_name=model_name, r=r)
+        model = model.to(device).eval()
+        latency_mean, latency_median, latency_iqr, final_tokens = inference(
+            model,
+            device,
+            args.batch_size,
+        )
+
+        message = tome_message(
+            model_name,
+            config,
+            model,
+            latency_mean,
+            latency_median,
+            latency_iqr,
+            final_tokens,
+            r,
+        )
+
+        print(message)
+        all_data.append(
+            {
+                "Parameters": sum(p.numel() for p in model.parameters()),
+                "Depth": config["depth"],
+                "Embedding Dim": config["embed_dim"],
+                "r": r,
+                "Mean (ms)": latency_mean,
+                "Median (ms)": latency_median,
+                "IQR (ms)": latency_iqr,
+                "final_tokens": final_tokens,
+            }
+        )
+    filename = (
+        "_".join(
+            [
+                device_info(args).replace(" ", ""),
+                "tome",
+                model_name.replace("_", ""),
+                f"bs{args.batch_size}",
+                f"{args.filetag}",
+            ]
+        )
+        + ".csv"
+    )
+    export_sweep_data(all_data, filename)
+
 def exit_sweep(args):
     model_name = args.exit_sweep_model
     r = args.exit_sweep_r
@@ -473,7 +601,9 @@ def exit_sweep(args):
     for exit_at in range(total_layers):
         model.forward = partial(model.forward, exit_at=exit_at)
         latency_mean, latency_median, latency_iqr, final_tokens = inference(
-            model, device, args.batch_size, args.use_decoder
+            model,
+            device,
+            args.batch_size,
         )
         message = f"""\
         ========================
@@ -489,7 +619,7 @@ def exit_sweep(args):
         ========================\
         """
         message = textwrap.dedent(message)
-    
+
         print(message)
         all_data.append(
             {
@@ -499,7 +629,7 @@ def exit_sweep(args):
                 "Mean (ms)": latency_mean,
                 "Median (ms)": latency_median,
                 "IQR (ms)": latency_iqr,
-                "exit_at": exit_at + 1
+                "exit_at": exit_at + 1,
             }
         )
     if args.exit_sweep_dino:
@@ -522,8 +652,7 @@ def exit_sweep(args):
                     device_info(args).replace(" ", ""),
                     "tome",
                     model_name.replace("_", ""),
-                    f"r{r}"
-                    f"bs{args.batch_size}",
+                    f"r{r}" f"bs{args.batch_size}",
                     f"{args.filetag}",
                 ]
             )
@@ -531,14 +660,18 @@ def exit_sweep(args):
         )
     export_sweep_data(all_data, filename)
 
+
 def test_single(args):
     ### Get args, device
     device = torch.device(args.device)
 
     ### Parse model name, choose appropriate factory function
-    if "compvit" in args.model:
+    if "deit" in args.model:
+        print(f"Using deit factory for {args.model}")
+        model, config = compdeit_factory("tiny")
+    elif "compvit" in args.model:
         print(f"Using compvit factory for {args.model}")
-        model, config = compvit_factory(model_name=args.model)
+        model, config = compvit_factory(model_name=args.model, r=args.tome_r)
     elif "dinov2" in args.model:
         ### Wrap DinoV2 model here as necessary
         if args.wrap_tome:
@@ -558,7 +691,9 @@ def test_single(args):
 
     # Inference
     latency_mean, latency_median, latency_iqr, final_tokens = inference(
-        model, device, args.batch_size, args.use_decoder
+        model,
+        device,
+        args.batch_size,
     )
     print(
         f"{args.model}| Mean/Median/IQR latency (ms) is {latency_mean:.2f} | {latency_median:.2f} | {latency_iqr:.2f}, Final Tokens: {final_tokens}"
@@ -570,18 +705,23 @@ def main():
     device_name = device_info(args)
     print(f"{colour_text('Device', 'red')}: {device_name}")
 
-    testing_multiple = args.all_dino or args.all_compvit
+    testing_multiple = args.all_dino or args.all_compvit or args.all_deit
     if testing_multiple:
         if args.all_dino:
             print(
                 f"{colour_text(f'Benchmarking DINOv2 Models @ batch size = {args.batch_size}.', 'yellow')}"
             )
-            test_dino(args)
+            test_baseline(args)
         if args.all_compvit:
             print(
                 f"{colour_text(f'Benchmarking CompViT Models  @ batch size = {args.batch_size}.', 'yellow')}"
             )
             test_compvit(args)
+        if args.all_deit:
+            print(
+                f"{colour_text(f'Benchmarking DeiT Models @ batch size = {args.batch_size}.', 'yellow')}"
+            )
+            test_baseline(args)
         return 0
     elif args.compvit_sweep:
         message = f"""\
@@ -599,6 +739,14 @@ def main():
         """
         print(textwrap.dedent(message))
         tome_sweep(args)
+        return 0
+    elif args.topk_sweep:
+        message = f"""\
+        {colour_text(f'Benchmarking TopK on {args.topk_sweep_model} @ batch size = {args.batch_size}.', 'yellow')}
+        {colour_text(f"Sweeping r values 2 to 24.", 'yellow')}\
+        """
+        print(textwrap.dedent(message))
+        topk_sweep(args)
         return 0
     elif args.exit_sweep_dino or args.exit_sweep_tome:
         message = f"""\

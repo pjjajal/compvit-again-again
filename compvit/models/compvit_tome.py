@@ -1,21 +1,31 @@
 from functools import partial
-from typing import Literal, Union, Sequence, Tuple
+from typing import Literal, Sequence, Tuple, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from dinov2.layers import Mlp
-from dinov2.layers import NestedTensorBlock as Block
-from dinov2.layers import PatchEmbed, SwiGLUFFNFused
+from dinov2.layers import Mlp, PatchEmbed, SwiGLUFFNFused
+from dinov2.layers.attention import (
+    XFORMERS_AVAILABLE,
+    XFORMERS_ENABLED,
+    Attention,
+    MemEffAttention,
+)
+from dinov2.layers.block import Block, NestedTensorBlock
 from dinov2.models.vision_transformer import DinoVisionTransformer
-from .compvit import CompViT
-
-from ..layers.compressor import Compressor, CompressorV2, CompressorV3
-from ..layers.block import CompBlock
-from ..layers.attention import CrossAttention
+from thirdparty.tome.patch.dinov2 import (
+    ToMeDinoV2Block,
+    ToMeDinoV2NestedTensorBlock,
+    ToMeDinoV2Attention,
+    ToMeDinoV2MemEffAttention,
+)
 from thirdparty.tome.utils import parse_r
-from thirdparty.tome.patch.dinov2 import ToMeDinoV2Block
+
+from ..layers.attention import CrossAttention
+from ..layers.block import CompBlock
+from ..layers.compressor import Compressor
+from .compvit import CompViT
 
 
 class CompViTToMe(CompViT):
@@ -45,6 +55,7 @@ class CompViTToMe(CompViT):
         num_compressed_tokens=[0],
         num_patches=256,
         bottleneck_loc=[5],
+        r=0,
         **kwargs,
     ):
         super().__init__(
@@ -72,14 +83,13 @@ class CompViTToMe(CompViT):
             num_compressed_tokens,
             num_patches,
             bottleneck_loc,
-            **kwargs,
         )
 
         self.total_tokens = num_patches + self.num_tokens + self.num_register_tokens
         # self.total_tokens = num_patches
         self.num_compressed_tokens = num_compressed_tokens  # Add CLS Token
 
-        self.r = 0
+        self.r = r
         self._tome_info = {
             "r": self.r,
             "size": None,
@@ -90,8 +100,27 @@ class CompViTToMe(CompViT):
             "distill_token": False,
         }
 
-        for i in self.blocks:
-            print(f"Block {i}")
+        for name, module in self.named_modules():
+            if "blocks" in name:
+                i = -1
+                split_name = name.split(".")
+                if len(split_name) > 1:
+                    i = int(split_name[1])
+                
+                if i <= bottleneck_loc[-1]:
+                    if isinstance(module, NestedTensorBlock):
+                        module.__class__ = ToMeDinoV2NestedTensorBlock
+                        module._tome_info = self._tome_info
+                    elif isinstance(module, Block):
+                        module.__class__ = ToMeDinoV2Block
+                        module._tome_info = self._tome_info
+
+                    if isinstance(module, MemEffAttention):
+                        module.__class__ = ToMeDinoV2MemEffAttention
+                        module._tome_info = self._tome_info
+                    elif isinstance(module, Attention):
+                        module.__class__ = ToMeDinoV2Attention
+                        module._tome_info = self._tome_info
 
     def forward(self, *args, is_training=False, **kwargs):
         ### Update self._tome_info
@@ -106,4 +135,4 @@ class CompViTToMe(CompViT):
 
 
 if __name__ == "__main__":
-    CompViTToMe(num_compressed_tokens=16, block_chunks=0)
+    print(CompViTToMe(block_chunks=0, num_compressed_tokens=[16]))

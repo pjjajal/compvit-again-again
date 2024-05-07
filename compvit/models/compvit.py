@@ -115,7 +115,6 @@ class CompViT(DinoVisionTransformer):
                         num_compressed_tokens=comp_tokens,
                         num_tokens=self.total_tokens,
                         num_register_tokens=self.num_register_tokens,
-                        **kwargs,
                     )
                 )
             self.compressors = nn.ModuleList(compressors)

@@ -29,10 +29,8 @@ class Compressor(nn.Module):
         num_compressed_tokens: int = 16,
         num_tokens: int = 196,
         num_register_tokens: int = 0,
-        *args,
-        **kwargs
     ) -> None:
-        super().__init__(*args, **kwargs)
+        super().__init__()
         self.num_tokens = num_tokens
         self.num_compressed_tokens = num_compressed_tokens
         self.num_register_tokens = num_register_tokens
