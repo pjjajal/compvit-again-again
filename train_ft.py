@@ -69,6 +69,7 @@ def parse_args():
     parser.add_argument(
         "--use_cutmix", default=False, action="store_true", help="Use cutmix"
     )
+    parser.add_argument("--ema", default=0.98)
     parser.add_argument("--checkpoint", type=Path, default=None)
     parser.add_argument("--save_tag", type=str, default="")
 
@@ -127,7 +128,7 @@ class LightningFT(L.LightningModule):
         self.criterion = nn.CrossEntropyLoss()
 
         self.ema_model = torch.optim.swa_utils.AveragedModel(
-            self.model, multi_avg_fn=torch.optim.swa_utils.get_ema_multi_avg_fn(0.999)
+            self.model, multi_avg_fn=torch.optim.swa_utils.get_ema_multi_avg_fn(self.args.ema)
         )
 
         self.cutmix_or_mixup = []
@@ -181,13 +182,13 @@ class LightningFT(L.LightningModule):
 
         # ema model eval
         ema_outputs = self.ema_model(x)
-        ema_loss = self.criterion(outputs, label)
+        ema_loss = self.criterion(ema_outputs, label)
 
         # Accuracy
         self.accuracy_top1(outputs, label)
         self.accuracy_top5(outputs, label)
-        self.ema_accuracy_top1(outputs, label)
-        self.ema_accuracy_top5(outputs, label)
+        self.ema_accuracy_top1(ema_outputs, label)
+        self.ema_accuracy_top5(ema_outputs, label)
         self.log(
             "accuracy_top1",
             self.accuracy_top1,
@@ -316,6 +317,7 @@ def main(args):
     if trainer.global_rank == 0:
         wandb_logger.experiment.config.update(
             {
+                "init_checkpoint": model_config['checkpoint'],
                 **config,
                 **hyperparameters,
                 **args,

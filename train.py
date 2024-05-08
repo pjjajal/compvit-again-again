@@ -82,7 +82,7 @@ def parse_args():
     parser.add_argument(
         "--use_cutmix", default=False, action="store_true", help="Use cutmix"
     )
-
+    parser.add_argument("--ema", default=0.98)
     # Other arguments.
     parser.add_argument(
         "--cache_save_path", type=Path, default=None, help="Path where to cache data"
@@ -123,7 +123,7 @@ class LightningDistill(L.LightningModule):
         self.teacher = teacher
 
         self.ema_student = torch.optim.swa_utils.AveragedModel(
-            self.student, multi_avg_fn=torch.optim.swa_utils.get_ema_multi_avg_fn(0.999)
+            self.student, multi_avg_fn=torch.optim.swa_utils.get_ema_multi_avg_fn(self.args.ema)
         )
 
         # Decoder.
