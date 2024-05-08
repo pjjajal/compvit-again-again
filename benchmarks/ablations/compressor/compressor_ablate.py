@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Literal
 import pandas as pd
 import torch
 import torch.utils.benchmark as bench
-from compvit.layers.compressor import Compressor
+from compvit.layers.compressor import Compressor, CompressorMlp
 from benchmark import (
     colour_text,
     device_info,
@@ -52,6 +52,7 @@ def parse_args():
     parser.add_argument("--size", choices=["small", "base", "large", "huge"])
     parser.add_argument("--num_compressed_tokens", type=int, nargs="+")
     parser.add_argument("--input_sizes", type=int, nargs="+")
+    parser.add_argument("--mlp", action="store_true")
     return parser.parse_args()
 
 
@@ -88,16 +89,27 @@ def main():
 
     data = []
     for num_compressed_tokens, input_size in pairs:
-        compressor = Compressor(
-            mlp_ratio=4,
-            qkv_bias=True,
-            ffn_bias=True,
-            proj_bias=True,
-            init_values=1.0,
-            num_compressed_tokens=num_compressed_tokens,
-            **COMPRESSOR_SIZE[args.size],
-        ).to(device)
-        compressor.eval()
+        if args.mlp:
+            compressor = CompressorMlp(
+                mlp_ratio=4,
+                qkv_bias=True,
+                ffn_bias=True,
+                proj_bias=True,
+                init_values=1.0,
+                num_compressed_tokens=num_compressed_tokens,
+                num_tokens=input_size,
+                **COMPRESSOR_SIZE[args.size],
+            ).to(device)
+        else:
+            compressor = Compressor(
+                mlp_ratio=4,
+                qkv_bias=True,
+                ffn_bias=True,
+                proj_bias=True,
+                init_values=1.0,
+                num_compressed_tokens=num_compressed_tokens,
+                **COMPRESSOR_SIZE[args.size],
+            ).to(device)
 
         latency_mean, latency_median, latency_iqr = inference(
             compressor,
@@ -136,7 +148,7 @@ def main():
             }
         )
 
-    filename = SAVE_LOC + f"compressor_ablate_{args.size}.csv"
+    filename = SAVE_LOC + f"compressor_ablate_{args.size}{'_mlp' if args.mlp else ''}.csv"
     export_sweep_data(data, filename)
 
 

@@ -229,7 +229,7 @@ class CompressorMlp(Compressor):
             num_register_tokens,
         )
 
-        self.mlp = Mlp(dim, int(dim * mlp_ratio), num_compressed_tokens)
+        self.mlp = Mlp(dim, int(dim // mlp_ratio), num_compressed_tokens)
 
     def forward(self, x, get_attn=False):
         B, N, C = x.shape
