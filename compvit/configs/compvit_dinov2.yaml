@@ -17,6 +17,7 @@ compvits14:
   num_patches: 256
   num_compressed_tokens: [16]
   bottleneck_loc: [5]
+  comptype: "mlp"
 
 
 compvitb14:
@@ -38,6 +39,7 @@ compvitb14:
   num_patches: 256
   num_compressed_tokens: [16]
   bottleneck_loc: [4]
+  comptype: "mlp"
 
 
 
@@ -60,6 +62,7 @@ compvitl14:
   num_patches: 256
   num_compressed_tokens: [16]
   bottleneck_loc: [11]
+  comptype: "mlp"
 
 
 compvitg14:
@@ -81,5 +84,5 @@ compvitg14:
   num_patches: 256
   num_compressed_tokens: [16]
   bottleneck_loc: [10]
-
+  comptype: "mlp"
 

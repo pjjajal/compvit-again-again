@@ -94,7 +94,6 @@ class Compressor(nn.Module):
         return compressed_tokens
 
 
-
 class CompressorQueryBank(nn.Module):
     def __init__(
         self,
@@ -185,6 +184,74 @@ class CompressorQueryBank(nn.Module):
         compressed_tokens = self.ca_block(x, queries, get_attn)
         x = torch.cat([x, compressed_tokens], dim=1)
         compressed_tokens = self.sa_block(compressed_tokens)
+        compressed_tokens = self.ca_block_2(x, compressed_tokens, get_attn)
+
+        if self.num_register_tokens > 0:
+            compressed_tokens = torch.cat(
+                [cls_token, registers, compressed_tokens], dim=1
+            )
+        else:
+            compressed_tokens = torch.cat([cls_token, compressed_tokens], dim=1)
+
+        return compressed_tokens
+
+
+class CompressorMlp(Compressor):
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int,
+        mlp_ratio: float = 4.0,
+        qkv_bias: bool = False,
+        proj_bias: bool = True,
+        ffn_bias: bool = True,
+        init_values=None,
+        act_layer: Callable[..., nn.Module] = nn.GELU,
+        norm_layer: Callable[..., nn.Module] = nn.LayerNorm,
+        ffn_layer: Callable[..., nn.Module] = Mlp,
+        num_compressed_tokens: int = 16,
+        num_tokens: int = 196,
+        num_register_tokens: int = 0,
+    ) -> None:
+        super().__init__(
+            dim,
+            num_heads,
+            mlp_ratio,
+            qkv_bias,
+            proj_bias,
+            ffn_bias,
+            init_values,
+            act_layer,
+            norm_layer,
+            ffn_layer,
+            num_compressed_tokens,
+            num_tokens,
+            num_register_tokens,
+        )
+
+        self.mlp = Mlp(dim, int(dim * mlp_ratio), num_compressed_tokens)
+
+    def forward(self, x, get_attn=False):
+        B, N, C = x.shape
+
+        if self.num_register_tokens > 0:
+            cls_token, registers, x = (
+                x[:, 0:1],
+                x[:, 1 : self.num_register_tokens + 1],
+                x[:, self.num_register_tokens + 1 :],
+            )
+        else:
+            cls_token, x = x[:, 0:1], x[:, 1:]
+
+        x = self.norm(x)
+
+        queries = self.mlp(x)
+        queries = F.softmax(queries.mT, dim=-1)
+        queries = queries @ x # (B, num_compressed_tokens, C)
+        queries = queries + self.queries
+
+        compressed_tokens = self.ca_block(x, queries, get_attn)
+        x = torch.cat([x, compressed_tokens], dim=1)
         compressed_tokens = self.ca_block_2(x, compressed_tokens, get_attn)
 
         if self.num_register_tokens > 0:

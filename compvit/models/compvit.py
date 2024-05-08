@@ -9,7 +9,7 @@ from dinov2.layers import Mlp
 from dinov2.layers import NestedTensorBlock as Block
 from dinov2.layers import PatchEmbed, SwiGLUFFNFused
 from dinov2.models.vision_transformer import DinoVisionTransformer
-from ..layers.compressor import Compressor, CompressorQueryBank
+from ..layers.compressor import Compressor, CompressorQueryBank, CompressorMlp
 from ..layers.block import CompBlock
 from ..layers.attention import CrossAttention
 
@@ -98,10 +98,15 @@ class CompViT(DinoVisionTransformer):
             # Set the blocks where bottleneck will be with None
             self.bottleneck_loc = bottleneck_loc
 
+            if kwargs['comptype'] == "mlp":
+                compressor = CompressorMlp
+            else:
+                compressor = Compressor
+
             compressors = []
             for loc, comp_tokens in zip(bottleneck_loc, num_compressed_tokens):
                 compressors.append(
-                    Compressor(
+                    compressor(
                         dim=embed_dim,
                         num_heads=num_heads,
                         mlp_ratio=mlp_ratio,
