@@ -15,8 +15,8 @@ compvits14:
   drop_path_uniform: True
   # Compressor Specific
   num_patches: 256
-  num_compressed_tokens: [96,16]
-  bottleneck_loc: [2,5]
+  num_compressed_tokens: [16]
+  bottleneck_loc: [5]
 
 
 compvitb14:

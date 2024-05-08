@@ -23,7 +23,7 @@ hyperparameters:
   mixup_alpha: 0.8 
   accumulations: 4
   in_memory: False
-  gradient_clip_val: 1.5
+  gradient_clip_val: 100
 
 args:
   device: cuda:0
