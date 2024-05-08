@@ -23,6 +23,8 @@ from benchmark import (
 
 from dataclasses import dataclass
 
+SAVE_LOC = "./benchmarks/ablations/compressor/"
+
 COMPRESSOR_SIZE = {
     "small": {
         "dim": 384,
@@ -134,7 +136,7 @@ def main():
             }
         )
 
-    filename = f"compressor_ablate_{args.size}.csv"
+    filename = SAVE_LOC + f"compressor_ablate_{args.size}.csv"
     export_sweep_data(data, filename)
 
 
