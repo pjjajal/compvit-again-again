@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Literal
 import pandas as pd
 import torch
 import torch.utils.benchmark as bench
-from compvit.layers.compressor import Compressor, CompressorMlp
+from compvit.layers.compressor import Compressor, CompressorMlp, CompressorQueryBank
 from benchmark import (
     colour_text,
     device_info,
@@ -53,6 +53,7 @@ def parse_args():
     parser.add_argument("--num_compressed_tokens", type=int, nargs="+")
     parser.add_argument("--input_sizes", type=int, nargs="+")
     parser.add_argument("--mlp", action="store_true")
+    parser.add_argument("--bank", action="store_true")
     return parser.parse_args()
 
 
@@ -92,6 +93,17 @@ def main():
         if args.mlp:
             compressor = CompressorMlp(
                 mlp_ratio=4,
+                qkv_bias=True,
+                ffn_bias=True,
+                proj_bias=True,
+                init_values=1.0,
+                num_compressed_tokens=num_compressed_tokens,
+                num_tokens=input_size,
+                **COMPRESSOR_SIZE[args.size],
+            ).to(device)
+        elif args.bank:
+            compressor = CompressorQueryBank(
+                banksize=128,
                 qkv_bias=True,
                 ffn_bias=True,
                 proj_bias=True,
@@ -147,8 +159,12 @@ def main():
                 "Compressed Tokens": num_compressed_tokens,
             }
         )
-
-    filename = SAVE_LOC + f"compressor_ablate_{args.size}{'_mlp' if args.mlp else ''}.csv"
+    comp_type = ""
+    if args.mlp:
+        comp_type = "_mlp"
+    elif args.bank:
+        comp_type = "_bank"
+    filename = SAVE_LOC + f"compressor_ablate_{args.size}{comp_type}.csv"
     export_sweep_data(data, filename)
 
 
