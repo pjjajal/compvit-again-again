@@ -100,6 +100,8 @@ class CompViT(DinoVisionTransformer):
 
             if kwargs['comptype'] == "mlp":
                 compressor = CompressorMlp
+            elif kwargs['comptype'] == "bank":
+                compressor = partial(CompressorQueryBank, banksize=128)
             else:
                 compressor = Compressor
 
