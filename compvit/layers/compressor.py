@@ -110,7 +110,6 @@ class CompressorQueryBank(nn.Module):
         num_compressed_tokens: int = 16,
         num_tokens: int = 196,
         num_register_tokens: int = 0,
-        bottleneck: nn.Module = None,
         bank_size: int = 0,
         *args,
         **kwargs
@@ -137,19 +136,6 @@ class CompressorQueryBank(nn.Module):
             ffn_layer=ffn_layer,
             init_values=init_values,
             attn_class=CrossAttention,
-        )
-        self.sa_block = Block(
-            dim=dim,
-            num_heads=num_heads,
-            mlp_ratio=mlp_ratio,
-            qkv_bias=qkv_bias,
-            proj_bias=proj_bias,
-            ffn_bias=ffn_bias,
-            norm_layer=norm_layer,
-            act_layer=act_layer,
-            ffn_layer=ffn_layer,
-            init_values=init_values,
-            attn_class=AttentionComp,
         )
         self.ca_block_2 = CompBlock(
             dim=dim,
@@ -183,7 +169,6 @@ class CompressorQueryBank(nn.Module):
 
         compressed_tokens = self.ca_block(x, queries, get_attn)
         x = torch.cat([x, compressed_tokens], dim=1)
-        compressed_tokens = self.sa_block(compressed_tokens)
         compressed_tokens = self.ca_block_2(x, compressed_tokens, get_attn)
 
         if self.num_register_tokens > 0:

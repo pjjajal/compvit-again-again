@@ -14,7 +14,7 @@ import torch
 from torch.nn.modules import Module
 from typing_extensions import Literal
 
-from compvit.layers.compressor import Compressor
+from compvit.layers.compressor import Compressor, CompressorMlp, CompressorQueryBank
 
 
 # Make the forward similar to DINO
@@ -110,11 +110,17 @@ class CompDeiT(DeiT):
         self.num_compressed_tokens = num_compressed_tokens  # Add CLS Token
         self.bottleneck_loc = bottleneck_loc
 
+        if kwargs['comptype'] == "mlp":
+            compressor = CompressorMlp
+        elif kwargs['comptype'] == "bank":
+            compressor = partial(CompressorQueryBank, bank_size = 128)
+        else:
+            compressor = Compressor
 
         compressors = []
         for loc, comp_tokens in zip(bottleneck_loc, num_compressed_tokens):
             compressors.append(
-                Compressor(
+                compressor(
                     dim=embed_dim,
                     num_heads=num_heads,
                     mlp_ratio=mlp_ratio,
@@ -128,7 +134,6 @@ class CompDeiT(DeiT):
                     num_compressed_tokens=comp_tokens,
                     num_tokens=self.total_tokens,
                     num_register_tokens=reg_tokens,
-                    **kwargs,
                 )
             )
         self.compressors = nn.ModuleList(compressors)

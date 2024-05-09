@@ -7,7 +7,8 @@ tiny:
   drop_path_rate: 0.0
   # Compressor Specific
   num_compressed_tokens: [16]
-  bottleneck_loc: [5]
+  bottleneck_loc: [3]
+  comptype: "mlp"
 
 small:
   drop_rate: 0.0
@@ -19,6 +20,7 @@ small:
   # Compressor Specific
   num_compressed_tokens: [16]
   bottleneck_loc: [5]
+  comptype: "mlp"
 
 
 base:
@@ -31,6 +33,7 @@ base:
   # Compressor Specific
   num_compressed_tokens: [16]
   bottleneck_loc: [5]
+  comptype: "mlp"
 
 
 large:
@@ -43,3 +46,5 @@ large:
   # Compressor Specific
   num_compressed_tokens: [16]
   bottleneck_loc: [5]
+  comptype: "mlp"
+

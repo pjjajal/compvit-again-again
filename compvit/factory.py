@@ -30,12 +30,8 @@ def compvit_factory(
 
     # kwargs can overwrite the default config. This allows for overriding config defaults.
     conf = OmegaConf.merge(conf[model_name], kwargs)
-    
-    r = kwargs['r']
-    if r:
-        model = CompViTToMe(block_fn=partial(Block, attn_class=attn_class), **conf)
-    else:
-        model = CompViT(block_fn=partial(Block, attn_class=attn_class), **conf)
+
+    model = CompViT(block_fn=partial(Block, attn_class=attn_class), **conf)
 
     return (model, conf)
 
