@@ -26,6 +26,7 @@ from dinov2.factory import dinov2_factory
 from exited_models.patch import exit_patch
 from thirdparty.tome.factory import dinov2_tome_factory
 from thirdparty.topk.factory import dinov2_topk_factory
+from thirdparty.tome.patch.timm import apply_patch
 
 
 def parse_args():
@@ -95,7 +96,16 @@ def parse_args():
     tome_sweep.add_argument("--tome-sweep", action="store_true")
     tome_sweep.add_argument(
         "--tome-sweep-model",
-        choices=["dinov2_vits14", "dinov2_vitb14", "dinov2_vitl14", "dinov2_vitg14"],
+        choices=[
+            "deit_tiny",
+            "deit_small",
+            "deit_base",
+            "deit_large",
+            "dinov2_vits14",
+            "dinov2_vitb14",
+            "dinov2_vitl14",
+            "dinov2_vitg14",
+        ],
     )
 
     tome_sweep = parser.add_argument_group(
@@ -254,7 +264,7 @@ def inference(model, device, batch_size):
         latency_mean = latency_measurement.mean * 1e3
         latency_median = latency_measurement.median * 1e3
         latency_iqr = latency_measurement.iqr * 1e3
-        
+
         final_tokens = model.forward(rand_x, is_training=True)["x_norm"].shape[1]
 
     return latency_mean, latency_median, latency_iqr, final_tokens
@@ -482,8 +492,24 @@ def tome_sweep(args):
     ### Get args, device
     device = torch.device(args.device)
     all_data = []
-    for r in range(8, 48):
-        model, config = dinov2_tome_factory(dinov2_model_name=model_name, r=r)
+    for r in range(1, 30):
+        if "dinov2" in model_name:
+            model, config = dinov2_tome_factory(dinov2_model_name=model_name, r=r)
+        elif "deit" in model_name:
+            if model_name == "deit_tiny":
+                model = deit_tiny_patch16_224(dynamic_img_size=True)
+                config = {"depth": 12, "embed_dim": 192}
+            elif model_name == "deit_small":
+                model = deit3_small_patch16_224(dynamic_img_size=True)
+                config = {"depth": 12, "embed_dim": 384}
+            elif model_name == "deit_base":
+                model = deit3_base_patch16_224(dynamic_img_size=True)
+                config = {"depth": 12, "embed_dim": 768}
+            elif model_name == "deit_large":
+                model = deit3_large_patch16_224(dynamic_img_size=True)
+                config = {"depth": 24, "embed_dim": 1024}
+            model = apply_patch(model)
+            model.r = r
         model = model.to(device).eval()
         latency_mean, latency_median, latency_iqr, final_tokens = inference(
             model,
@@ -582,6 +608,7 @@ def topk_sweep(args):
         + ".csv"
     )
     export_sweep_data(all_data, filename)
+
 
 def exit_sweep(args):
     model_name = args.exit_sweep_model
