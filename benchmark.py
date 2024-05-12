@@ -497,18 +497,14 @@ def tome_sweep(args):
             model, config = dinov2_tome_factory(dinov2_model_name=model_name, r=r)
         elif "deit" in model_name:
             if model_name == "deit_tiny":
-                model = deit_tiny_patch16_224(dynamic_img_size=True)
-                config = {"depth": 12, "embed_dim": 192}
+                model, config = deit_tiny_patch16_224(dynamic_img_size=True)
             elif model_name == "deit_small":
-                model = deit3_small_patch16_224(dynamic_img_size=True)
-                config = {"depth": 12, "embed_dim": 384}
+                model, config = deit3_small_patch16_224(dynamic_img_size=True)
             elif model_name == "deit_base":
-                model = deit3_base_patch16_224(dynamic_img_size=True)
-                config = {"depth": 12, "embed_dim": 768}
+                model, config = deit3_base_patch16_224(dynamic_img_size=True)
             elif model_name == "deit_large":
-                model = deit3_large_patch16_224(dynamic_img_size=True)
-                config = {"depth": 24, "embed_dim": 1024}
-            model = apply_patch(model)
+                model, config = deit3_large_patch16_224(dynamic_img_size=True)
+            apply_patch(model)
             model.r = r
         model = model.to(device).eval()
         latency_mean, latency_median, latency_iqr, final_tokens = inference(
