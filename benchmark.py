@@ -27,6 +27,7 @@ from exited_models.patch import exit_patch
 from thirdparty.tome.factory import dinov2_tome_factory
 from thirdparty.topk.factory import dinov2_topk_factory
 from thirdparty.tome.patch.timm import apply_patch
+from thirdparty.topk.timm import timm_apply_patch
 
 
 def parse_args():
@@ -114,7 +115,16 @@ def parse_args():
     tome_sweep.add_argument("--topk-sweep", action="store_true")
     tome_sweep.add_argument(
         "--topk-sweep-model",
-        choices=["dinov2_vits14", "dinov2_vitb14", "dinov2_vitl14", "dinov2_vitg14"],
+        choices=[
+            "deit_tiny",
+            "deit_small",
+            "deit_base",
+            "deit_large",
+            "dinov2_vits14",
+            "dinov2_vitb14",
+            "dinov2_vitl14",
+            "dinov2_vitg14",
+        ],
     )
 
     exiting = parser.add_argument_group(
@@ -558,8 +568,20 @@ def topk_sweep(args):
     ### Get args, device
     device = torch.device(args.device)
     all_data = []
-    for r in range(8, 48):
-        model, config = dinov2_topk_factory(dinov2_model_name=model_name, r=r)
+    for r in range(1, 30):
+        if "dinov2" in model_name:
+            model, config = dinov2_topk_factory(dinov2_model_name=model_name, r=r)
+        elif "deit" in model_name:
+            if model_name == "deit_tiny":
+                model, config = deit_tiny_patch16_224(dynamic_img_size=True)
+            elif model_name == "deit_small":
+                model, config = deit3_small_patch16_224(dynamic_img_size=True)
+            elif model_name == "deit_base":
+                model, config = deit3_base_patch16_224(dynamic_img_size=True)
+            elif model_name == "deit_large":
+                model, config = deit3_large_patch16_224(dynamic_img_size=True)
+            model = timm_apply_patch(model)
+            model.r = r
         model = model.to(device).eval()
         latency_mean, latency_median, latency_iqr, final_tokens = inference(
             model,

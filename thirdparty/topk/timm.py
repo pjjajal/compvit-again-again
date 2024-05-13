@@ -268,7 +268,6 @@ def get_timm_wrapped_class(vit : torch.nn.Module):
 ### Patch a specific model
 ###
 def timm_apply_patch(
-    args : Namespace, 
     vit : torch.nn.Module
     ):
 
@@ -287,9 +286,9 @@ def timm_apply_patch(
     ###
     for module in vit.modules():
         if isinstance(module, Block):
-            module.__class__ = CustomTIMMAttentionBlock if args.wrapper == "hatp" else TopKTIMMAttentionBlock
+            module.__class__ = TopKTIMMAttentionBlock
             module._hatp_info = vit._hatp_info
         if isinstance(module, Attention):
-            module.__class__ = CustomTIMMAttention if args.wrapper == "hatp" else TopKTIMMAttention
+            module.__class__ = TopKTIMMAttention
 
     return vit
