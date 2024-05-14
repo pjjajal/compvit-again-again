@@ -32,6 +32,7 @@ def parse_args():
     parser = argparse.ArgumentParser("training and evaluation script")
     # General Arguments.
     parser.add_argument("--model", choices=["dino", "deit"], default="dino")
+    parser.add_argument("--tome", default=0, type=int)
     parser.add_argument(
         "--dataset",
         required=True,
@@ -82,7 +83,7 @@ def parse_args():
     parser.add_argument(
         "--use_cutmix", default=False, action="store_true", help="Use cutmix"
     )
-    parser.add_argument("--ema", default=0.98)
+    parser.add_argument("--ema", default=0.999)
     # Other arguments.
     parser.add_argument(
         "--cache_save_path", type=Path, default=None, help="Path where to cache data"
@@ -337,6 +338,7 @@ def main(args):
     student, teacher, config = distill_factory(
         teacher_name=teacher_config["name"],
         student_name=student_config["name"],
+        r=args.tome
     )
     if teacher_checkpoint:
         teacher.load_state_dict(torch.load(teacher_checkpoint))

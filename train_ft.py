@@ -22,6 +22,13 @@ from deit.deit import CompDeiT
 from compvit.models.compvit import CompViT
 from datasets import create_dataset
 from dinov2.factory import dinov2_factory
+from deit.factory import (
+    deit_tiny_patch16_224,
+    deit3_small_patch16_224,
+    deit3_base_patch16_224,
+    deit3_large_patch16_224,
+)
+from thirdparty.tome.patch.timm import apply_patch
 from dinov2.models.vision_transformer import DinoVisionTransformer
 from utils.schedulers import CosineAnnealingWithWarmup
 
@@ -35,6 +42,7 @@ torch.set_float32_matmul_precision("medium")
 def parse_args():
     parser = argparse.ArgumentParser("training and evaluation script")
     parser.add_argument("--model", choices=["dino", "deit"], default="dino")
+    parser.add_argument("--tome", default=0, type=int)
     parser.add_argument(
         "--dataset", required=True, choices=["cifar10", "cifar100", "imagenet"]
     )
@@ -128,7 +136,8 @@ class LightningFT(L.LightningModule):
         self.criterion = nn.CrossEntropyLoss()
 
         self.ema_model = torch.optim.swa_utils.AveragedModel(
-            self.model, multi_avg_fn=torch.optim.swa_utils.get_ema_multi_avg_fn(self.args.ema)
+            self.model,
+            multi_avg_fn=torch.optim.swa_utils.get_ema_multi_avg_fn(self.args.ema),
         )
 
         self.cutmix_or_mixup = []
@@ -280,7 +289,34 @@ def main(args):
             model.load_state_dict(torch.load(args.checkpoint), strict=False)
 
     if args.model == "deit":
-        model, config = compdeit_factory(model_config["name"])
+        if args.tome:
+            if model_config["name"] == "tiny":
+                model, config = deit_tiny_patch16_224(
+                    pretrained=True,
+                    pretrained_strict=False,
+                    dynamic_img_size=True,
+                )
+            elif model_config["name"] == "small":
+                model, config = deit3_small_patch16_224(
+                    pretrained=True,
+                    pretrained_strict=False,
+                    dynamic_img_size=True,
+                )
+            elif model_config["name"] == "base":
+                model, config = deit3_base_patch16_224(
+                    pretrained=True,
+                    pretrained_strict=False,
+                    dynamic_img_size=True,
+                )
+            elif model_config["name"] == "large":
+                model, config = deit3_large_patch16_224(
+                    pretrained=True,
+                    dynamic_img_size=True,
+                )
+            apply_patch(model)
+            model.r = args.tome
+        else:
+            model, config = compdeit_factory(model_config["name"])
         if model_config["checkpoint"]:
             print("Loading", model_config["checkpoint"])
             model.load_state_dict(torch.load(model_config["checkpoint"]), strict=False)
@@ -317,7 +353,7 @@ def main(args):
     if trainer.global_rank == 0:
         wandb_logger.experiment.config.update(
             {
-                "init_checkpoint": model_config['checkpoint'],
+                "init_checkpoint": model_config["checkpoint"],
                 **config,
                 **hyperparameters,
                 **args,

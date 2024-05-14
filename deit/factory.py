@@ -11,6 +11,8 @@ from .deit import (
     deit3_small_patch16_224,
 )
 
+from thirdparty.tome.patch.timm import apply_patch
+
 CONFIG_PATH = Path(os.path.dirname(os.path.abspath(__file__))) / "configs"
 
 
@@ -80,8 +82,31 @@ def distill_factory(
             pretrained=True,
             dynamic_img_size=True,
         )
-
-    student, student_conf = compdeit_factory(student_name, **kwargs)
+    if kwargs['r']:
+        if student_name == "tiny":
+            student, student_conf = deit_tiny_patch16_224(
+                pretrained=True,
+                dynamic_img_size=True,
+            )
+        elif student_name == "small":
+            student, student_conf = deit3_small_patch16_224(
+                pretrained=True,
+                dynamic_img_size=True,
+            )
+        elif student_name == "base":
+            student, student_conf = deit3_base_patch16_224(
+                pretrained=True,
+                dynamic_img_size=True,
+            )
+        elif student_name == "large":
+            student, student_conf = deit3_large_patch16_224(
+                pretrained=True,
+                dynamic_img_size=True,
+            )
+        apply_patch(student)
+        student.r = kwargs['r']
+    else:
+        student, student_conf = compdeit_factory(student_name, **kwargs)
 
     return (
         student,
